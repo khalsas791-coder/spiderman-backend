@@ -22,6 +22,8 @@ require("dotenv").config();
 const express = require("express");
 const cors    = require("cors");
 const admin   = require("firebase-admin");
+const qrcode  = require("qrcode");
+const crypto  = require("crypto");
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -288,6 +290,139 @@ app.get("/api/orders/:uid", async (req, res) => {
     const snap   = await db.collection("orders").where("userId","==",req.params.uid).orderBy("createdAt","desc").get();
     res.json({ success: true, orders: snap.docs.map(d => d.data()) });
   } catch (err) { res.status(err.status||500).json({ success: false, error: err.message }); }
+});
+
+// ══════════════════════════════════════════════════
+//  UPI PAYMENTS & WEBHOOKS
+// ══════════════════════════════════════════════════
+
+// 1. Initiate Payment (Generate URI & QR)
+app.post("/api/payment/initiate", async (req, res) => {
+  console.log("💳 Received UPI Initiation Request");
+  if (!adminReady) {
+    console.error("❌ Firebase Admin not ready");
+    return notReady(res);
+  }
+  try {
+    const decoded = await verifyToken(req);
+    console.log(`👤 Verified user: ${decoded.email}`);
+    const { amount, name } = req.body;
+    
+    if (!amount || amount <= 0) {
+      console.warn("⚠️ Invalid amount:", amount);
+      return res.status(400).json({ success: false, error: "Invalid amount." });
+    }
+
+    const transactionId = "TXN" + crypto.randomBytes(8).toString("hex").toUpperCase();
+    
+    // Dynamic UPI Intent parameters
+    const pa = process.env.UPI_ID || "merchant@upi";
+    const pn = encodeURIComponent(process.env.UPI_NAME || "SpiderMan Shop");
+    const am = parseFloat(amount).toFixed(2);
+    
+    // Create the UPI intent URI format
+    const upiUri = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tr=${transactionId}`;
+    
+    // Generate QR Code Base64
+    const qrBase64 = await qrcode.toDataURL(upiUri, {
+      color: { dark: "#060810", light: "#ffffff" },
+      margin: 2,
+      scale: 8
+    });
+
+    // Store Transaction in Firestore
+    const txDoc = {
+      userId: decoded.uid,
+      userName: name || decoded.email,
+      upiId: pa,
+      amount: am,
+      transactionId,
+      status: "PENDING",
+      createdAt: new Date().toISOString()
+    };
+    
+    await db.collection("transactions").doc(transactionId).set(txDoc);
+    console.log(`🏦 Payment Initiated: ${transactionId} via UPI`);
+
+    // SIMULATED GATEWAY CALLBACK HOOK
+    // Because we don't have a real PhonePe/Razorpay merchant hook triggering us,
+    // we simulate the bank resolving the transaction 10 seconds later securely.
+    setTimeout(async () => {
+      console.log(`⏱️ Simulated Gateway Callback firing for ${transactionId}...`);
+      // Simulate calling our own webhook
+      try {
+        const fetchUrl = `http://localhost:${PORT}/api/payment/webhook`;
+        await fetch(fetchUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionId,
+            status: "SUCCESS" // Mocking successful payment
+          })
+        });
+      } catch (err) {
+        console.error("Mock webhook fetch failed:", err.message);
+      }
+    }, 10000);
+
+    res.json({ success: true, transactionId, upiUri, qrBase64, amount: am });
+  } catch (err) {
+    console.error("💥 Payment Initiation Error:", err);
+    res.status(err.status || 500).json({ success: false, error: err.message || "Internal server error" });
+  }
+});
+
+// 2. Client Status Polling
+app.get("/api/payment/status/:transactionId", async (req, res) => {
+  if (!adminReady) return notReady(res);
+  try {
+    const { transactionId } = req.params;
+    const snap = await db.collection("transactions").doc(transactionId).get();
+    
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, error: "Transaction not found." });
+    }
+    
+    res.json({ success: true, status: snap.data().status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Server Webhook Endpoint (Receives gateway updates)
+app.post("/api/payment/webhook", async (req, res) => {
+  if (!adminReady) return notReady(res);
+  try {
+    // In production, you would verify a HMAC signature from the gateway here
+    // e.g., const signature = req.headers['x-razorpay-signature'];
+    
+    const { transactionId, status } = req.body;
+    
+    if (!transactionId || !status) {
+      return res.status(400).json({ success: false, error: "Missing payload." });
+    }
+
+    const txRef = db.collection("transactions").doc(transactionId);
+    const doc = await txRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, error: "Txn not found" });
+    }
+
+    // Update status in DB safely
+    await txRef.update({ 
+      status, 
+      updatedAt: new Date().toISOString() 
+    });
+
+    console.log(`🏦 Webhook Processed: ${transactionId} -> ${status}`);
+    
+    // We send 200 OK fast so the gateway doesn't retry
+    res.status(200).json({ success: true, message: "Webhook accepted." });
+  } catch (err) {
+    console.error("Webhook Error:", err);
+    res.status(500).json({ success: false, error: "Internal webhook error" });
+  }
 });
 
 // GET /api/admin/orders — admin only
