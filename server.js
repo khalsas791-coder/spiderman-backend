@@ -316,8 +316,8 @@ app.post("/api/payment/initiate", async (req, res) => {
     const transactionId = "TXN" + crypto.randomBytes(8).toString("hex").toUpperCase();
     
     // Dynamic UPI Intent parameters
-    const pa = process.env.UPI_ID || "merchant@upi";
-    const pn = encodeURIComponent(process.env.UPI_NAME || "SpiderMan Shop");
+    const pa = process.env.UPI_ID || "8688899190@ibl";
+    const pn = encodeURIComponent(process.env.UPI_NAME || "SARDAR JASPREET SINGH KAPSE");
     const am = parseFloat(amount).toFixed(2);
     
     // Create the UPI intent URI format
@@ -351,7 +351,8 @@ app.post("/api/payment/initiate", async (req, res) => {
       console.log(`⏱️ Simulated Gateway Callback firing for ${transactionId}...`);
       // Simulate calling our own webhook
       try {
-        const fetchUrl = `http://localhost:${PORT}/api/payment/webhook`;
+        const baseUrl = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+        const fetchUrl = `${baseUrl}/api/payment/webhook`;
         await fetch(fetchUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
