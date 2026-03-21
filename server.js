@@ -138,39 +138,58 @@ app.get("/api/products", async (_req, res) => {
     // Static fallback when Firebase is not configured
     return res.json({ success: true, products: [
       {
-        id: "spiderman-mask-v1",
-        name: "Spider-Man Premium Mask",
-        description: "Movie-accurate, high-density ABS shell with magnetic lenses and premium fabric.",
-        price: 50,
+        id: "premium-mask-red",
+        name: "Classic Red Mask",
+        description: "Movie-accurate, high-density ABS shell with magnetic lenses.",
+        price: 49.99,
         oldPrice: 89.99,
         discount: "44% OFF",
-        emoji: "🕷️",
         category: "Masks",
         section: "Limited",
         rating: 4.9,
         reviews: 2847,
-        stock: true,
-        limited: true,
-        image: "https://images.unsplash.com/photo-1635863138275-d9b33299680b?w=400"
-      },
-      {
-        id: "spiderman-3-hot-toys",
-        name: "Spider-Man 3™ 1/6th Scale Figure",
-        description: "An authentic and detailed likeness of Spider-Man in the Spider-Man 3 movie.",
-        price: 80.00,
-        oldPrice: 150.00,
-        discount: "Limited 46% OFF",
-        emoji: "🕸️",
-        category: "Toys",
-        section: "Special",
-        rating: 5.0,
-        reviews: 1337,
-        stock: true,
-        limited: true,
         image: "https://images.unsplash.com/photo-1635863138275-d9b33299680b?w=400",
         modelUrl: "models/mask.glb"
+      },
+      {
+        id: "miles-morales-hoodie",
+        name: "Miles Morales Stealth Hoodie",
+        description: "Premium cotton blend with glowing neon accents. Perfect for night swings.",
+        price: 65.00,
+        oldPrice: 85.00,
+        discount: "23% OFF",
+        category: "Hoodies",
+        section: "Special",
+        rating: 4.8,
+        reviews: 1205,
+        sizes: ["S", "M", "L", "XL"],
+        image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400"
+      },
+      {
+        id: "spidey-web-shooter-toy",
+        name: "Pro Web-Shooter Replica",
+        description: "Functional web-shooting toy with realistic sound effects and lighting.",
+        price: 35.00,
+        category: "Toys",
+        section: "Special",
+        rating: 4.7,
+        reviews: 850,
+        image: "https://images.unsplash.com/photo-1623939012331-9894238d6322?w=400"
+      },
+      {
+         id: "avengers-base-building-set",
+         name: "Avengers Tower Building Set",
+         description: "Highly detailed brick set of the iconic Avengers tower with mini figures.",
+         price: 120.00,
+         discount: "Limited Edition",
+         category: "Toys",
+         section: "Limited",
+         rating: 5.0,
+         reviews: 420,
+         image: "https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?w=400"
       }
     ]});
+
   }
   try {
     const snap = await db.collection("products").orderBy("createdAt", "desc").get();
