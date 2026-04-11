@@ -457,6 +457,51 @@ app.get("/api/admin/orders", async (req, res) => {
   } catch (err) { res.status(err.status||500).json({ success: false, error: err.message }); }
 });
 
+// ══════════════════════════════════════════════════
+//  FINANCE TRACKING
+// ══════════════════════════════════════════════════
+
+// GET /api/finance — admin only
+app.get("/api/finance", async (req, res) => {
+  if (!adminReady) return notReady(res);
+  try {
+    await verifyAdmin(req);
+    const snap = await db.collection("finance").orderBy("date", "desc").get();
+    const transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ success: true, transactions });
+  } catch (err) { res.status(err.status || 500).json({ success: false, error: err.message }); }
+});
+
+// POST /api/finance — admin only
+app.post("/api/finance", async (req, res) => {
+  if (!adminReady) return notReady(res);
+  try {
+    await verifyAdmin(req);
+    const data = { 
+      ...req.body, 
+      createdAt: admin.firestore.FieldValue.serverTimestamp() 
+    };
+    delete data.idToken;
+    
+    // Ensure numeric amount
+    data.amount = parseFloat(data.amount) || 0;
+    
+    const ref = await db.collection("finance").add(data);
+    res.status(201).json({ success: true, id: ref.id, message: "Transaction recorded." });
+  } catch (err) { res.status(err.status || 500).json({ success: false, error: err.message }); }
+});
+
+// DELETE /api/finance/:id — admin only
+app.delete("/api/finance/:id", async (req, res) => {
+  if (!adminReady) return notReady(res);
+  try {
+    await verifyAdmin(req);
+    await db.collection("finance").doc(req.params.id).delete();
+    res.json({ success: true, message: "Transaction deleted." });
+  } catch (err) { res.status(err.status || 500).json({ success: false, error: err.message }); }
+});
+
+
 // ── 404 + ERROR ──────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: "Route not found." }));
 app.use((err, _req, res, _next) => { console.error("💥", err); res.status(500).json({ error: "Internal server error." }); });
